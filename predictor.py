@@ -22,19 +22,21 @@ def norm(data):
     return data
 
 
+
 input_train_data = pd.read_pickle(input_train_file)
 input_test_data = pd.read_pickle(input_test_file)
-train_x = input_train_data.iloc[:1200, 1:]
-#train_x = norm(train_x)
-train_y = input_train_data.iloc[:1200, 0]
-valid_x = input_train_data.iloc[1200:, 1:]
-#valid_x = norm(valid_x)
-valid_y = input_train_data.iloc[1200:, 0]
+permutation = np.random.permutation(input_train_data.shape[0])
+#input_train_data = input_train_data.iloc[permutation, :]
+
+train_x = input_train_data.iloc[:972, 1:]
+train_y = input_train_data.iloc[:972, 0]
+valid_x = input_train_data.iloc[972:, 1:]
+valid_y = input_train_data.iloc[972:, 0]
 
 
 
 if reg_opt == 'xg':
-    reg = XGBRegressor(learning_rate=0.07, max_depth=4, n_estimators=300, min_child_weight=1, gamma=0.5)
+    reg = XGBRegressor(learning_rate=0.1, max_depth=4, n_estimators=360, min_child_weight=1)
 elif reg_opt == 'svr':
     reg = SVR()
 elif reg_opt == 'rf':
@@ -48,7 +50,9 @@ print(rmse)
 
 #with pd.option_context('display.max_rows', None, 'display.max_columns', None):
 #    print(input_test_data)
-predict_result = reg.predict(input_test_data)
+new_reg = XGBRegressor(learning_rate=0.1, max_depth=4, n_estimators=360, min_child_weight=1)
+new_reg.fit(input_train_data.iloc[:, 1:], input_train_data.iloc[:, 0])
+predict_result = new_reg.predict(input_test_data)
 
 with open('submit_{0}.csv'.format(reg_opt), 'w+') as output_file:
     output_file.write('Id,SalePrice\n')

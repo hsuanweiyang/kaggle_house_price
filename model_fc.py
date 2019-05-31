@@ -5,7 +5,7 @@ from sys import argv
 from xgboost import XGBRegressor
 import math
 from sklearn.ensemble import RandomForestRegressor
-
+from tensorflow.contrib.boosted_trees.estimator_batch.estimator import GradientBoostedDecisionTreeClassifier
 
 def read_input_data(input_file):
     input_data = pd.read_pickle(input_file)
@@ -55,7 +55,7 @@ def add_layer(W, b, X, activation=tf.nn.leaky_relu):
     return A
 
 
-def forward_propogation(X, parameters, drop_rate):
+def forward_propogation(X, Y, parameters, drop_rate):
     w1 = parameters['w1']
     b1 = parameters['b1']
     w2 = parameters['w2']
@@ -71,11 +71,8 @@ def forward_propogation(X, parameters, drop_rate):
     A2 = tf.nn.dropout(A2, rate=drop_rate)
     A3 = add_layer(w3, b3, A2)
     A3 = tf.nn.dropout(A3, rate=drop_rate)
-    #A4 = add_layer(w4, b4, A3)
-    #A4 = tf.nn.dropout(A4, rate=drop_rate)
     Z_out = tf.matmul(w4, A3) + b4
     return Z_out
-
 
 def compute_cost(Y, Z_out):
     #Y = tf.log(Y)
@@ -126,7 +123,7 @@ def model(train_x, train_y, valid_x, valid_y, learing_rate=0.001, num_epoch=1000
     parameters = initialize_parameters(n_feature)
     drop_rate = tf.placeholder(tf.float32, name='drop_rate')
 
-    Z_out = forward_propogation(X, parameters, drop_rate)
+    Z_out = forward_propogation(X, Y, parameters, drop_rate)
     log_loss = log_cost(Y, Z_out)
     loss = compute_cost(Y, Z_out)
     if regularization > 0.:
