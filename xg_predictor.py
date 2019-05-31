@@ -7,6 +7,7 @@ import os
 import multiprocessing
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
+
 def generate_fold(input_data, fold_num=3):
     n_sample = input_data.shape[0]
     permutation = np.random.permutation(n_sample)
@@ -40,15 +41,15 @@ def rmsle(y_pred, y_true):
     return np.sqrt(np.mean(np.square(np.log1p(y_pred)-np.log1p(y_true))))
 
 
-def train_with_crossvalidation(train_data, fold_num, parameters):
-    train_fold, valid_fold = generate_fold(train_data, fold_num)
+def train_with_crossvalidation(parameters):
+    train_fold, valid_fold = generate_fold(train_data, cv_fold_num)
     average_rmsle = 0
-    for each_fold in range(fold_num):
-        average_rmsle += (train_xg(train_fold[each_fold], valid_fold[each_fold], parameters)) / fold_num
+    for each_fold in range(cv_fold_num):
+        average_rmsle += (train_xg(train_fold[each_fold], valid_fold[each_fold], parameters)) / cv_fold_num
     return average_rmsle, parameters
 
 
-def parameter_tuning(train_data, cv_fold):
+def single_process_parameter_tuning(train_data, cv_fold):
     learning_rate_range = np.arange(0.01, 0.21, 0.03)
     min_child_weight_range = np.arange(1, 4, 1)
     max_depth_range = np.arange(3, 11, 1)
@@ -61,7 +62,7 @@ def parameter_tuning(train_data, cv_fold):
                 for n_estimator in n_estimator_range:
                     parameters = {'learning_rate': learning_rate, 'min_child_weight': min_child_weight,
                                   'max_depth': max_depth, 'n_estimator': n_estimator}
-                    current_rmsle, _ = train_with_crossvalidation(train_data, cv_fold, parameters)
+                    current_rmsle, _ = train_with_crossvalidation(train_data, [cv_fold, parameters])
                     if current_rmsle < best_rmsle:
                         best_rmsle = current_rmsle
                         best_parameters = parameters
@@ -69,7 +70,29 @@ def parameter_tuning(train_data, cv_fold):
                     sys.stdout.write('Tuning Progress:\t{0} %\t rmsle:\t{1}\r'.format(round((100*i)/3381, 2), best_rmsle))
                     sys.stdout.flush()
 
+    return best_rmsle, best_parameters
 
+
+def multi_process_parameter_tuning():
+    parameter_pair = generate_parameter_pair()
+    multiprocess = multiprocessing.Pool(3)
+    results = multiprocess.map(train_with_crossvalidation, parameter_pair)
+    multiprocess.close()
+    multiprocess.join()
+    best_rmsle = 100
+    best_parameters = {'learning_rate': -1, 'min_child_weight': 0, 'max_depth': 100}
+    for result in results:
+        if result[0] < best_rmsle:
+            best_rmsle = result[0]
+        elif result[0] == best_rmsle:
+            if result[1]['learning_rate'] > best_parameters['learning_rate']:
+                best_parameters['learning_rate'] = result[1]['learning_rate']
+            if result[1]['min_child_weight'] > best_parameters['min_child_weight']:
+                best_parameters['min_child_weight'] = result[1]['min_child_weight']
+            if result[1]['max_depth'] < best_parameters['max_depth']:
+                best_parameters['max_depth'] = result[1]['max_depth']
+            if result[1]['n_estimator'] < best_parameters['n_estimator']:
+                best_parameters['n_estimator'] = result[1]['n_estimator']
     return best_rmsle, best_parameters
 
 
@@ -89,7 +112,6 @@ def generate_parameter_pair():
 
 
 
-
 if __name__ == '__main__':
     input_train_file = argv[1]
     input_test_file = argv[2]
@@ -97,9 +119,5 @@ if __name__ == '__main__':
 
     train_data = pd.read_pickle(input_train_file)
     test_data = pd.read_pickle(input_test_file)
-    '''
-    final_rmsle, best_parameters = parameter_tuning(train_data, cv_fold_num)
-    print(final_rmsle)
-    print(best_parameters)
-    '''
-    multiprocess = multiprocessing.Pool(3)
+    multi_process_parameter_tuning()
+
